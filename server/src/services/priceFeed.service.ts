@@ -96,6 +96,8 @@ class PriceFeedService {
         case 'range_break':
           newPrice = this.tickRangeBreak(symbol, config);
           break;
+        default:
+          newPrice = this.currentPrices[symbol] || config.basePrice;
       }
 
       // Round to 2 decimals

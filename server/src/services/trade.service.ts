@@ -88,7 +88,13 @@ export async function placeTrade(params: PlaceTradeParams) {
   }
 
   // 4. Real trade — atomic wallet debit + trade creation
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    logger.error({ err }, 'Failed to acquire DB connection for trade');
+    throw new AppError('Service temporarily unavailable', 503, 'DB_UNAVAILABLE');
+  }
   try {
     await client.query('BEGIN');
 
@@ -152,7 +158,7 @@ export async function placeTrade(params: PlaceTradeParams) {
       new_balance: balanceAfter,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
     client.release();
@@ -173,7 +179,13 @@ async function placeDemoTrade(params: {
   const { userId, assetId, direction, amount, timeframeSeconds, entryPrice, payoutRate, expiresAt, symbol } = params;
 
   // Atomic demo balance debit + trade creation in a single transaction
-  const client = await pool.connect();
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    logger.error({ err }, 'Failed to acquire DB connection for demo trade');
+    throw new AppError('Service temporarily unavailable', 503, 'DB_UNAVAILABLE');
+  }
   try {
     await client.query('BEGIN');
 
@@ -221,7 +233,7 @@ async function placeDemoTrade(params: {
       new_balance: newBalance,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
     client.release();
