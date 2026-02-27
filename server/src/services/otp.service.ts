@@ -96,6 +96,7 @@ async function sendSMS(phone: string, message: string): Promise<void> {
     logger.info({ phone }, 'OTP SMS sent');
   } catch (error) {
     logger.error({ error, phone }, 'Failed to send OTP SMS');
-    throw error;
+    // Don't throw — SMS failure should not block registration/login
+    // The OTP is already stored in DB and can be resent
   }
 }
