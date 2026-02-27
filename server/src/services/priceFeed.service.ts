@@ -1,183 +1,269 @@
-import WebSocket from 'ws';
 import { redis } from '../config/redis';
-import { env } from '../config/env';
 import { logger } from '../config/logger';
 
+// ── Asset Configuration ─────────────────────────────────
+
+interface AssetConfig {
+  basePrice: number;
+  behavior: 'velocity' | 'crash' | 'boom' | 'step' | 'range_break';
+  volatility?: number;
+  eventProbability?: number;
+  stepSize?: number;
+  rangeWidth?: number;
+  breakProbability?: number;
+}
+
+const ASSET_CONFIGS: Record<string, AssetConfig> = {
+  // Velocity Index — smooth random walk
+  'V10':        { basePrice: 5000, behavior: 'velocity', volatility: 0.00010 },
+  'V25':        { basePrice: 5000, behavior: 'velocity', volatility: 0.00025 },
+  'V50':        { basePrice: 5000, behavior: 'velocity', volatility: 0.00050 },
+  'V75':        { basePrice: 5000, behavior: 'velocity', volatility: 0.00075 },
+  'V100':       { basePrice: 5000, behavior: 'velocity', volatility: 0.00100 },
+  'V10-1s':     { basePrice: 5000, behavior: 'velocity', volatility: 0.00010 },
+  'V100-1s':    { basePrice: 5000, behavior: 'velocity', volatility: 0.00100 },
+
+  // Crash — slow uptrend with rare sharp drops
+  'CRASH-300':  { basePrice: 6000, behavior: 'crash', eventProbability: 1 / 300 },
+  'CRASH-500':  { basePrice: 6000, behavior: 'crash', eventProbability: 1 / 500 },
+  'CRASH-1000': { basePrice: 6000, behavior: 'crash', eventProbability: 1 / 1000 },
+
+  // Boom — slow downtrend with rare sharp spikes
+  'BOOM-300':   { basePrice: 4000, behavior: 'boom', eventProbability: 1 / 300 },
+  'BOOM-500':   { basePrice: 4000, behavior: 'boom', eventProbability: 1 / 500 },
+  'BOOM-1000':  { basePrice: 4000, behavior: 'boom', eventProbability: 1 / 1000 },
+
+  // Step — discrete fixed-size jumps
+  'STEP-100':   { basePrice: 5000, behavior: 'step', stepSize: 0.10 },
+  'STEP-200':   { basePrice: 5000, behavior: 'step', stepSize: 0.20 },
+  'STEP-500':   { basePrice: 5000, behavior: 'step', stepSize: 0.50 },
+
+  // Range Break — oscillates in band, periodic breakout
+  'RB-100':     { basePrice: 5000, behavior: 'range_break', rangeWidth: 0.004, breakProbability: 1 / 100 },
+  'RB-150':     { basePrice: 5000, behavior: 'range_break', rangeWidth: 0.004, breakProbability: 1 / 150 },
+  'RB-200':     { basePrice: 5000, behavior: 'range_break', rangeWidth: 0.004, breakProbability: 1 / 200 },
+};
+
+// ── Range Break State ───────────────────────────────────
+
+interface RangeState {
+  center: number;
+  width: number;
+  isBreaking: boolean;
+  breakTicks: number;
+  breakDirection: number;
+}
+
+// ── Price Feed Service ──────────────────────────────────
+
 class PriceFeedService {
-  private ws: WebSocket | null = null;
-  private subscribedSymbols: Set<string> = new Set();
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectTimer: NodeJS.Timeout | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private timer: NodeJS.Timeout | null = null;
+  private currentPrices: Record<string, number> = {};
+  private rangeStates: Record<string, RangeState> = {};
 
   connect() {
-    if (!env.TWELVE_DATA_API_KEY) {
-      logger.warn('Twelve Data API key not set — price feed disabled. Using simulated prices.');
-      this.startSimulatedFeed();
-      return;
+    this.startSyntheticFeed();
+  }
+
+  private startSyntheticFeed() {
+    // Initialize prices from base configs
+    for (const [symbol, config] of Object.entries(ASSET_CONFIGS)) {
+      this.currentPrices[symbol] = config.basePrice;
     }
 
-    const url = `wss://ws.twelvedata.com/v1/quotes/price?apikey=${env.TWELVE_DATA_API_KEY}`;
-    this.ws = new WebSocket(url);
+    // Tick every 1 second
+    this.timer = setInterval(() => this.tickAll(), 1000);
+    logger.info({ assetCount: Object.keys(ASSET_CONFIGS).length }, 'Velocity synthetic price feed started');
+  }
 
-    this.ws.on('open', () => {
-      logger.info('Connected to Twelve Data WebSocket');
-      this.reconnectAttempts = 0;
-      // Re-subscribe after reconnect
-      if (this.subscribedSymbols.size > 0) {
-        this.subscribe([...this.subscribedSymbols]);
+  private async tickAll() {
+    for (const [symbol, config] of Object.entries(ASSET_CONFIGS)) {
+      let newPrice: number;
+
+      switch (config.behavior) {
+        case 'velocity':
+          newPrice = this.tickVelocity(symbol, config);
+          break;
+        case 'crash':
+          newPrice = this.tickCrash(symbol, config);
+          break;
+        case 'boom':
+          newPrice = this.tickBoom(symbol, config);
+          break;
+        case 'step':
+          newPrice = this.tickStep(symbol, config);
+          break;
+        case 'range_break':
+          newPrice = this.tickRangeBreak(symbol, config);
+          break;
       }
-      this.startHeartbeat();
-    });
 
-    this.ws.on('message', (data: WebSocket.Data) => {
-      try {
-        const message = JSON.parse(data.toString());
-        if (message.event === 'price') {
-          this.handlePriceUpdate(message);
-        } else if (message.event === 'subscribe-status') {
-          logger.info({ status: message.status, symbols: message.success }, 'Twelve Data subscription status');
-        } else if (message.event === 'heartbeat') {
-          // Keep-alive from Twelve Data
-        }
-      } catch (err) {
-        logger.error({ err, data: data.toString() }, 'Failed to parse Twelve Data message');
+      // Round to 2 decimals
+      newPrice = Math.round(newPrice * 100) / 100;
+      this.currentPrices[symbol] = newPrice;
+
+      await this.publishPrice(symbol, newPrice, config);
+    }
+  }
+
+  // ── Velocity: Gaussian random walk with mean reversion ──
+
+  private tickVelocity(symbol: string, config: AssetConfig): number {
+    const current = this.currentPrices[symbol];
+    const base = config.basePrice;
+    const vol = config.volatility!;
+
+    // Box-Muller transform for Gaussian noise
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+
+    const change = gaussian * vol * current;
+    const meanReversion = (base - current) * 0.005;
+
+    return Math.max(base * 0.80, Math.min(base * 1.20, current + change + meanReversion));
+  }
+
+  // ── Crash: Slow uptrend with rare sharp drops ──
+
+  private tickCrash(symbol: string, config: AssetConfig): number {
+    const current = this.currentPrices[symbol];
+    const base = config.basePrice;
+
+    // Small upward drift + minor noise
+    const drift = current * 0.00005;
+    const noise = (Math.random() - 0.5) * current * 0.0001;
+
+    // Crash event check
+    if (Math.random() < config.eventProbability!) {
+      const crashMagnitude = 0.02 + Math.random() * 0.03; // 2-5% drop
+      return Math.max(base * 0.70, current * (1 - crashMagnitude));
+    }
+
+    const meanReversion = (base - current) * 0.002;
+    return Math.max(base * 0.70, Math.min(base * 1.30, current + drift + noise + meanReversion));
+  }
+
+  // ── Boom: Slow downtrend with rare sharp spikes ──
+
+  private tickBoom(symbol: string, config: AssetConfig): number {
+    const current = this.currentPrices[symbol];
+    const base = config.basePrice;
+
+    // Small downward drift + minor noise
+    const drift = -current * 0.00005;
+    const noise = (Math.random() - 0.5) * current * 0.0001;
+
+    // Boom event check
+    if (Math.random() < config.eventProbability!) {
+      const boomMagnitude = 0.02 + Math.random() * 0.03; // 2-5% spike
+      return Math.min(base * 1.30, current * (1 + boomMagnitude));
+    }
+
+    const meanReversion = (base - current) * 0.002;
+    return Math.max(base * 0.70, Math.min(base * 1.30, current + drift + noise + meanReversion));
+  }
+
+  // ── Step: Equal probability fixed-size up/down ──
+
+  private tickStep(symbol: string, config: AssetConfig): number {
+    const current = this.currentPrices[symbol];
+    const base = config.basePrice;
+    const step = config.stepSize!;
+
+    const direction = Math.random() < 0.5 ? 1 : -1;
+    let newPrice = current + direction * step;
+
+    // Soft boundary reversion at extremes
+    const distFromBase = Math.abs(newPrice - base) / base;
+    if (distFromBase > 0.10) {
+      newPrice += (base - newPrice) * 0.01;
+    }
+
+    return Math.max(base * 0.80, Math.min(base * 1.20, newPrice));
+  }
+
+  // ── Range Break: Oscillate in band, periodic breakout ──
+
+  private tickRangeBreak(symbol: string, config: AssetConfig): number {
+    const current = this.currentPrices[symbol];
+    const base = config.basePrice;
+
+    let state = this.rangeStates[symbol];
+    if (!state) {
+      state = {
+        center: base,
+        width: base * config.rangeWidth!,
+        isBreaking: false,
+        breakTicks: 0,
+        breakDirection: 1,
+      };
+      this.rangeStates[symbol] = state;
+    }
+
+    if (state.isBreaking) {
+      // During breakout: strong directional move
+      state.breakTicks--;
+      const breakMove = state.breakDirection * current * 0.001;
+      const noise = (Math.random() - 0.5) * current * 0.0002;
+
+      if (state.breakTicks <= 0) {
+        // End breakout, establish new range around current price
+        state.center = current;
+        state.width = base * config.rangeWidth!;
+        state.isBreaking = false;
       }
-    });
 
-    this.ws.on('close', (code, reason) => {
-      logger.warn({ code, reason: reason.toString() }, 'Twelve Data WS disconnected');
-      this.stopHeartbeat();
-      this.attemptReconnect();
-    });
-
-    this.ws.on('error', (error) => {
-      logger.error({ error }, 'Twelve Data WS error');
-    });
-  }
-
-  subscribe(symbols: string[]) {
-    symbols.forEach((s) => this.subscribedSymbols.add(s));
-
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        action: 'subscribe',
-        params: { symbols: symbols.join(',') },
-      }));
-      logger.info({ symbols }, 'Subscribed to Twelve Data symbols');
+      const meanReversion = (base - current) * 0.001;
+      return Math.max(base * 0.80, Math.min(base * 1.20, current + breakMove + noise + meanReversion));
     }
-  }
 
-  unsubscribe(symbols: string[]) {
-    symbols.forEach((s) => this.subscribedSymbols.delete(s));
+    // Normal: oscillate within range
+    const noise = (Math.random() - 0.5) * current * 0.0003;
+    let newPrice = current + noise;
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        action: 'unsubscribe',
-        params: { symbols: symbols.join(',') },
-      }));
+    // Bounce off range boundaries
+    const upper = state.center + state.width / 2;
+    const lower = state.center - state.width / 2;
+    if (newPrice > upper) newPrice = upper - Math.abs(noise);
+    if (newPrice < lower) newPrice = lower + Math.abs(noise);
+
+    // Check for breakout event
+    if (Math.random() < config.breakProbability!) {
+      state.isBreaking = true;
+      state.breakTicks = 5 + Math.floor(Math.random() * 10);
+      state.breakDirection = Math.random() < 0.5 ? 1 : -1;
     }
+
+    return newPrice;
   }
 
-  private async handlePriceUpdate(message: any) {
-    const { symbol, price, timestamp, bid, ask, day_volume } = message;
-    const priceNum = parseFloat(price);
+  // ── Price Publishing ──────────────────────────────────
+
+  private async publishPrice(symbol: string, price: number, config: AssetConfig) {
+    // Volatility-aware spread
+    const spreadFactor = config.volatility
+      ? Math.max(0.5, Math.min(3, config.volatility * 100))
+      : 1;
+    const spread = price * 0.00005 * spreadFactor;
 
     const priceData = {
       symbol,
-      price: priceNum,
-      bid: bid ? parseFloat(bid) : priceNum - 0.00002,
-      ask: ask ? parseFloat(ask) : priceNum + 0.00002,
-      timestamp: timestamp || Date.now(),
+      price,
+      bid: Math.round((price - spread) * 100) / 100,
+      ask: Math.round((price + spread) * 100) / 100,
+      timestamp: Date.now(),
       updated_at: Date.now(),
     };
 
-    // Cache in Redis with 60s TTL (auto-expire if feed dies)
-    await redis.set(`price:${symbol}`, JSON.stringify(priceData), 'EX', 60);
-
-    // Publish for WebSocket fan-out to clients
-    await redis.publish('price:updates', JSON.stringify(priceData));
-  }
-
-  private startHeartbeat() {
-    this.heartbeatTimer = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.ping();
-      }
-    }, 30000);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
-  private attemptReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error('Max reconnect attempts reached for Twelve Data WS');
-      return;
-    }
-
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-    this.reconnectAttempts++;
-
-    logger.info({ attempt: this.reconnectAttempts, delay }, 'Reconnecting to Twelve Data...');
-    this.reconnectTimer = setTimeout(() => this.connect(), delay);
-  }
-
-  /**
-   * Simulated price feed for development without a Twelve Data API key.
-   * Generates realistic-looking price movements.
-   */
-  private startSimulatedFeed() {
-    const basePrices: Record<string, number> = {
-      'EUR/USD': 1.0854, 'GBP/USD': 1.2650, 'USD/JPY': 149.85,
-      'AUD/USD': 0.6540, 'USD/CAD': 1.3580, 'EUR/GBP': 0.8580,
-      'USD/CHF': 0.8820, 'NZD/USD': 0.6020, 'EUR/JPY': 162.55,
-      'GBP/JPY': 189.45, 'BTC/USD': 62450.00, 'ETH/USD': 3420.00,
-      'XRP/USD': 0.5840, 'SOL/USD': 145.20, 'BNB/USD': 580.00,
-      'XAU/USD': 2340.50, 'XAG/USD': 27.85, 'WTI/USD': 78.40,
-    };
-
-    const currentPrices = { ...basePrices };
-
-    setInterval(async () => {
-      for (const [symbol, base] of Object.entries(currentPrices)) {
-        // Random walk with mean reversion
-        const volatility = symbol.includes('BTC') ? 0.0005 : symbol.includes('XAU') ? 0.0002 : 0.00008;
-        const change = (Math.random() - 0.5) * 2 * volatility * base;
-        const meanReversion = (basePrices[symbol] - currentPrices[symbol]) * 0.01;
-        currentPrices[symbol] = Math.max(base * 0.95, Math.min(base * 1.05, currentPrices[symbol] + change + meanReversion));
-
-        const price = currentPrices[symbol];
-        const spread = price * 0.00005;
-
-        const priceData = {
-          symbol,
-          price,
-          bid: price - spread,
-          ask: price + spread,
-          timestamp: Date.now(),
-          updated_at: Date.now(),
-        };
-
-        await redis.set(`price:${symbol}`, JSON.stringify(priceData), 'EX', 60).catch(() => {});
-        await redis.publish('price:updates', JSON.stringify(priceData)).catch(() => {});
-      }
-    }, 1000);
-
-    logger.info('Simulated price feed started (no Twelve Data API key)');
+    await redis.set(`price:${symbol}`, JSON.stringify(priceData), 'EX', 60).catch(() => {});
+    await redis.publish('price:updates', JSON.stringify(priceData)).catch(() => {});
   }
 
   disconnect() {
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.stopHeartbeat();
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
     }
   }
 }

@@ -32,12 +32,7 @@ export default function PriceDisplay({ symbol, price, bid, ask }: PriceDisplayPr
     return () => clearTimeout(timer);
   }, [price]);
 
-  const formatPrice = (p: number) => {
-    if (symbol.includes('JPY')) return p.toFixed(3);
-    if (symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('XAU'))
-      return p.toFixed(2);
-    return p.toFixed(5);
-  };
+  const formatPrice = (p: number) => p.toFixed(2);
 
   if (!price) {
     return (

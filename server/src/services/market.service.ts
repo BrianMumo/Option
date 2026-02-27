@@ -1,6 +1,6 @@
 import { db } from '../config/database';
 import { assets, priceSnapshots } from '../db/schema';
-import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
+import { eq, and, asc, desc } from 'drizzle-orm';
 import { redis } from '../config/redis';
 
 export async function getActiveAssets() {
@@ -74,7 +74,6 @@ export async function getCandles(
   interval: string = '1min',
   limit: number = 100
 ) {
-  // Check if we have enough real snapshots
   const snapshots = await db
     .select()
     .from(priceSnapshots)
@@ -92,47 +91,48 @@ export async function getCandles(
     }));
   }
 
-  // Generate simulated candles based on current live price from Redis
   return generateSimulatedCandles(symbol, interval, limit);
 }
 
-/** Generate simulated OHLC candles anchored to the current live price */
-async function generateSimulatedCandles(
-  symbol: string,
-  interval: string,
-  limit: number
-) {
-  // Use current live price from Redis as the base (so chart matches the live feed)
+// Velocity asset base prices (fallback when Redis has no data)
+const FALLBACK_PRICES: Record<string, number> = {
+  'V10': 5000, 'V25': 5000, 'V50': 5000, 'V75': 5000, 'V100': 5000,
+  'V10-1s': 5000, 'V100-1s': 5000,
+  'CRASH-300': 6000, 'CRASH-500': 6000, 'CRASH-1000': 6000,
+  'BOOM-300': 4000, 'BOOM-500': 4000, 'BOOM-1000': 4000,
+  'STEP-100': 5000, 'STEP-200': 5000, 'STEP-500': 5000,
+  'RB-100': 5000, 'RB-150': 5000, 'RB-200': 5000,
+};
+
+// Per-asset candle volatility for chart generation
+const CANDLE_VOLATILITIES: Record<string, number> = {
+  'V10': 0.001, 'V25': 0.002, 'V50': 0.004, 'V75': 0.006, 'V100': 0.008,
+  'V10-1s': 0.001, 'V100-1s': 0.008,
+  'CRASH-300': 0.005, 'CRASH-500': 0.004, 'CRASH-1000': 0.003,
+  'BOOM-300': 0.005, 'BOOM-500': 0.004, 'BOOM-1000': 0.003,
+  'STEP-100': 0.002, 'STEP-200': 0.003, 'STEP-500': 0.005,
+  'RB-100': 0.003, 'RB-150': 0.003, 'RB-200': 0.003,
+};
+
+async function generateSimulatedCandles(symbol: string, interval: string, limit: number) {
   const cached = await redis.get(`price:${symbol}`);
   let base: number;
 
   if (cached) {
-    const liveData = JSON.parse(cached);
-    base = liveData.price;
+    base = JSON.parse(cached).price;
   } else {
-    // Fallback hardcoded prices only if no live data at all
-    const fallbackPrices: Record<string, number> = {
-      'EUR/USD': 1.0854, 'GBP/USD': 1.2650, 'USD/JPY': 149.85,
-      'AUD/USD': 0.6540, 'USD/CAD': 1.3580, 'EUR/GBP': 0.8580,
-      'USD/CHF': 0.8820, 'NZD/USD': 0.6020, 'EUR/JPY': 162.55,
-      'GBP/JPY': 189.45, 'BTC/USD': 62450.00, 'ETH/USD': 3420.00,
-      'XRP/USD': 0.5840, 'SOL/USD': 145.20, 'BNB/USD': 580.00,
-      'XAU/USD': 2340.50, 'XAG/USD': 27.85, 'WTI/USD': 78.40,
-    };
-    base = fallbackPrices[symbol] || 100;
+    base = FALLBACK_PRICES[symbol] || 5000;
   }
 
   const intervalSeconds = parseIntervalSeconds(interval);
   const now = Math.floor(Date.now() / 1000);
   const candles = [];
+  const volatility = CANDLE_VOLATILITIES[symbol] || 0.003;
 
-  // Start slightly below current price and walk towards it
   let price = base * (0.995 + Math.random() * 0.005);
 
   for (let i = limit - 1; i >= 0; i--) {
     const time = now - i * intervalSeconds;
-    const volatility = symbol.includes('BTC') ? 0.008 : symbol.includes('ETH') ? 0.006 : symbol.includes('XAU') ? 0.003 : 0.002;
-    // Use multiple random sources for more organic movement
     const trend = Math.sin(i / 20) * volatility * 0.3;
     const noise = (Math.random() - 0.5) * 2 * volatility;
     const change = trend + noise;
@@ -144,10 +144,10 @@ async function generateSimulatedCandles(
 
     candles.push({
       time,
-      open: roundPrice(open, symbol),
-      high: roundPrice(high, symbol),
-      low: roundPrice(low, symbol),
-      close: roundPrice(close, symbol),
+      open: round2(open),
+      high: round2(high),
+      low: round2(low),
+      close: round2(close),
     });
 
     price = close;
@@ -164,9 +164,6 @@ function parseIntervalSeconds(interval: string): number {
   return map[interval] || 60;
 }
 
-function roundPrice(price: number, symbol: string): number {
-  if (symbol.includes('JPY')) return Math.round(price * 1000) / 1000;
-  if (symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('XAU'))
-    return Math.round(price * 100) / 100;
-  return Math.round(price * 100000) / 100000;
+function round2(price: number): number {
+  return Math.round(price * 100) / 100;
 }

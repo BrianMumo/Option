@@ -17,4 +17,4 @@ export const DEMO_INITIAL_BALANCE = 10_000;
 
 export const QUICK_AMOUNTS = [100, 500, 1000, 2000, 5000] as const;
 
-export const ASSET_CATEGORIES = ['forex', 'crypto', 'commodity', 'stock', 'index'] as const;
+export const ASSET_CATEGORIES = ['velocity', 'crash_boom', 'step', 'range_break'] as const;

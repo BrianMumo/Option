@@ -8,10 +8,18 @@ import clsx from 'clsx';
 
 const CATEGORIES = [
   { key: 'all', label: 'All' },
-  { key: 'forex', label: 'Forex' },
-  { key: 'crypto', label: 'Crypto' },
-  { key: 'commodity', label: 'Commodities' },
+  { key: 'velocity', label: 'Velocity' },
+  { key: 'crash_boom', label: 'Crash/Boom' },
+  { key: 'step', label: 'Step' },
+  { key: 'range_break', label: 'Range Break' },
 ];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  velocity: 'Velocity',
+  crash_boom: 'Crash/Boom',
+  step: 'Step',
+  range_break: 'Range Break',
+};
 
 interface AssetSelectorProps {
   onSelect?: () => void;
@@ -36,13 +44,6 @@ export default function AssetSelector({ onSelect }: AssetSelectorProps) {
     }
     return true;
   });
-
-  const formatPrice = (price: number, symbol: string) => {
-    if (symbol.includes('JPY')) return price.toFixed(3);
-    if (symbol.includes('BTC') || symbol.includes('ETH') || symbol.includes('XAU'))
-      return price.toFixed(2);
-    return price.toFixed(5);
-  };
 
   if (!isOpen) {
     return (
@@ -82,13 +83,13 @@ export default function AssetSelector({ onSelect }: AssetSelectorProps) {
       </div>
 
       {/* Category Tabs */}
-      <div className="flex gap-1 p-3 border-b border-surface-700">
+      <div className="flex gap-1 p-3 border-b border-surface-700 overflow-x-auto scrollbar-hide">
         {CATEGORIES.map((cat) => (
           <button
             key={cat.key}
             onClick={() => setCategory(cat.key)}
             className={clsx(
-              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+              'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
               category === cat.key
                 ? 'bg-brand-600 text-white'
                 : 'bg-surface-800 text-surface-200/60 hover:text-surface-200'
@@ -124,12 +125,13 @@ export default function AssetSelector({ onSelect }: AssetSelectorProps) {
                     {asset.symbol}
                   </span>
                   <span className={clsx(
-                    'text-[10px] px-1.5 py-0.5 rounded-full uppercase font-medium',
-                    asset.category === 'forex' && 'bg-blue-500/20 text-blue-400',
-                    asset.category === 'crypto' && 'bg-purple-500/20 text-purple-400',
-                    asset.category === 'commodity' && 'bg-yellow-500/20 text-yellow-400'
+                    'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
+                    asset.category === 'velocity' && 'bg-blue-500/20 text-blue-400',
+                    asset.category === 'crash_boom' && 'bg-red-500/20 text-red-400',
+                    asset.category === 'step' && 'bg-green-500/20 text-green-400',
+                    asset.category === 'range_break' && 'bg-amber-500/20 text-amber-400'
                   )}>
-                    {asset.category}
+                    {CATEGORY_LABELS[asset.category] || asset.category}
                   </span>
                 </div>
                 <p className="text-xs text-surface-200/50 mt-0.5">{asset.name}</p>
@@ -139,7 +141,7 @@ export default function AssetSelector({ onSelect }: AssetSelectorProps) {
                 {livePrice ? (
                   <>
                     <p className="text-sm font-mono text-surface-50">
-                      {formatPrice(livePrice.price, asset.symbol)}
+                      {livePrice.price.toFixed(2)}
                     </p>
                     <p className="text-xs text-surface-200/40">
                       {asset.payout_rate}% payout

@@ -92,7 +92,7 @@ export const assets = pgTable('assets', {
   symbol: varchar('symbol', { length: 20 }).unique().notNull(),
   name: varchar('name', { length: 100 }).notNull(),
   category: varchar('category', { length: 20 }).notNull(),
-  twelve_data_symbol: varchar('twelve_data_symbol', { length: 20 }).notNull(),
+  twelve_data_symbol: varchar('twelve_data_symbol', { length: 20 }),
   payout_rate: decimal('payout_rate', { precision: 5, scale: 2 }).default('85.00').notNull(),
   min_trade: decimal('min_trade', { precision: 15, scale: 2 }).default('50.00').notNull(),
   max_trade: decimal('max_trade', { precision: 15, scale: 2 }).default('100000.00').notNull(),
@@ -187,7 +187,7 @@ export const priceSnapshots = pgTable('price_snapshots', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   asset_symbol: varchar('asset_symbol', { length: 20 }).notNull(),
   price: decimal('price', { precision: 20, scale: 8 }).notNull(),
-  source: varchar('source', { length: 20 }).default('twelve_data').notNull(),
+  source: varchar('source', { length: 20 }).default('synthetic').notNull(),
   captured_at: timestamp('captured_at', { withTimezone: true }).notNull(),
 }, (table) => [
   uniqueIndex('uq_price_snapshot').on(table.asset_symbol, table.captured_at),

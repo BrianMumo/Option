@@ -6,7 +6,6 @@ interface Asset {
   symbol: string;
   name: string;
   category: string;
-  twelve_data_symbol: string;
   payout_rate: number;
   min_trade: number;
   max_trade: number;

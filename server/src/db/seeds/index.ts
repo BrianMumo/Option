@@ -4,29 +4,32 @@ import 'dotenv/config';
 import { assets, platformSettings } from '../schema';
 
 const SEED_ASSETS = [
-  // Forex
-  { symbol: 'EUR/USD', name: 'Euro / US Dollar', category: 'forex', twelve_data_symbol: 'EUR/USD', payout_rate: '85.00', sort_order: 1 },
-  { symbol: 'GBP/USD', name: 'British Pound / US Dollar', category: 'forex', twelve_data_symbol: 'GBP/USD', payout_rate: '85.00', sort_order: 2 },
-  { symbol: 'USD/JPY', name: 'US Dollar / Japanese Yen', category: 'forex', twelve_data_symbol: 'USD/JPY', payout_rate: '85.00', sort_order: 3 },
-  { symbol: 'AUD/USD', name: 'Australian Dollar / US Dollar', category: 'forex', twelve_data_symbol: 'AUD/USD', payout_rate: '82.00', sort_order: 4 },
-  { symbol: 'USD/CAD', name: 'US Dollar / Canadian Dollar', category: 'forex', twelve_data_symbol: 'USD/CAD', payout_rate: '82.00', sort_order: 5 },
-  { symbol: 'EUR/GBP', name: 'Euro / British Pound', category: 'forex', twelve_data_symbol: 'EUR/GBP', payout_rate: '83.00', sort_order: 6 },
-  { symbol: 'USD/CHF', name: 'US Dollar / Swiss Franc', category: 'forex', twelve_data_symbol: 'USD/CHF', payout_rate: '82.00', sort_order: 7 },
-  { symbol: 'NZD/USD', name: 'New Zealand Dollar / US Dollar', category: 'forex', twelve_data_symbol: 'NZD/USD', payout_rate: '80.00', sort_order: 8 },
-  { symbol: 'EUR/JPY', name: 'Euro / Japanese Yen', category: 'forex', twelve_data_symbol: 'EUR/JPY', payout_rate: '83.00', sort_order: 9 },
-  { symbol: 'GBP/JPY', name: 'British Pound / Japanese Yen', category: 'forex', twelve_data_symbol: 'GBP/JPY', payout_rate: '83.00', sort_order: 10 },
+  // Velocity Index — smooth random walk, tiered by volatility
+  { symbol: 'V10',       name: 'Velocity 10 Index',     category: 'velocity',    payout_rate: '82.00', sort_order: 1 },
+  { symbol: 'V25',       name: 'Velocity 25 Index',     category: 'velocity',    payout_rate: '84.00', sort_order: 2 },
+  { symbol: 'V50',       name: 'Velocity 50 Index',     category: 'velocity',    payout_rate: '86.00', sort_order: 3 },
+  { symbol: 'V75',       name: 'Velocity 75 Index',     category: 'velocity',    payout_rate: '88.00', sort_order: 4 },
+  { symbol: 'V100',      name: 'Velocity 100 Index',    category: 'velocity',    payout_rate: '90.00', sort_order: 5 },
+  { symbol: 'V10-1s',    name: 'Velocity 10 (1s)',      category: 'velocity',    payout_rate: '80.00', sort_order: 6 },
+  { symbol: 'V100-1s',   name: 'Velocity 100 (1s)',     category: 'velocity',    payout_rate: '92.00', sort_order: 7 },
 
-  // Crypto
-  { symbol: 'BTC/USD', name: 'Bitcoin / US Dollar', category: 'crypto', twelve_data_symbol: 'BTC/USD', payout_rate: '90.00', sort_order: 11 },
-  { symbol: 'ETH/USD', name: 'Ethereum / US Dollar', category: 'crypto', twelve_data_symbol: 'ETH/USD', payout_rate: '88.00', sort_order: 12 },
-  { symbol: 'XRP/USD', name: 'Ripple / US Dollar', category: 'crypto', twelve_data_symbol: 'XRP/USD', payout_rate: '87.00', sort_order: 13 },
-  { symbol: 'SOL/USD', name: 'Solana / US Dollar', category: 'crypto', twelve_data_symbol: 'SOL/USD', payout_rate: '88.00', sort_order: 14 },
-  { symbol: 'BNB/USD', name: 'Binance Coin / US Dollar', category: 'crypto', twelve_data_symbol: 'BNB/USD', payout_rate: '86.00', sort_order: 15 },
+  // Crash/Boom — trending with sudden reversal events
+  { symbol: 'CRASH-300',  name: 'Crash 300 Index',      category: 'crash_boom',  payout_rate: '87.00', sort_order: 8 },
+  { symbol: 'CRASH-500',  name: 'Crash 500 Index',      category: 'crash_boom',  payout_rate: '85.00', sort_order: 9 },
+  { symbol: 'CRASH-1000', name: 'Crash 1000 Index',     category: 'crash_boom',  payout_rate: '83.00', sort_order: 10 },
+  { symbol: 'BOOM-300',   name: 'Boom 300 Index',       category: 'crash_boom',  payout_rate: '87.00', sort_order: 11 },
+  { symbol: 'BOOM-500',   name: 'Boom 500 Index',       category: 'crash_boom',  payout_rate: '85.00', sort_order: 12 },
+  { symbol: 'BOOM-1000',  name: 'Boom 1000 Index',      category: 'crash_boom',  payout_rate: '83.00', sort_order: 13 },
 
-  // Commodities
-  { symbol: 'XAU/USD', name: 'Gold / US Dollar', category: 'commodity', twelve_data_symbol: 'XAU/USD', payout_rate: '85.00', sort_order: 16 },
-  { symbol: 'XAG/USD', name: 'Silver / US Dollar', category: 'commodity', twelve_data_symbol: 'XAG/USD', payout_rate: '82.00', sort_order: 17 },
-  { symbol: 'WTI/USD', name: 'Crude Oil WTI', category: 'commodity', twelve_data_symbol: 'WTI/USD', payout_rate: '80.00', sort_order: 18 },
+  // Step Index — discrete fixed-size up/down, 50/50
+  { symbol: 'STEP-100',  name: 'Step 100 Index',        category: 'step',        payout_rate: '85.00', sort_order: 14 },
+  { symbol: 'STEP-200',  name: 'Step 200 Index',        category: 'step',        payout_rate: '87.00', sort_order: 15 },
+  { symbol: 'STEP-500',  name: 'Step 500 Index',        category: 'step',        payout_rate: '89.00', sort_order: 16 },
+
+  // Range Break — oscillates in band, periodic breakout
+  { symbol: 'RB-100',    name: 'Range Break 100',       category: 'range_break', payout_rate: '88.00', sort_order: 17 },
+  { symbol: 'RB-150',    name: 'Range Break 150',       category: 'range_break', payout_rate: '86.00', sort_order: 18 },
+  { symbol: 'RB-200',    name: 'Range Break 200',       category: 'range_break', payout_rate: '84.00', sort_order: 19 },
 ];
 
 const SEED_SETTINGS = [
@@ -47,7 +50,10 @@ async function seed() {
   });
   const db = drizzle(pool);
 
-  console.log('Seeding assets...');
+  console.log('Clearing old assets...');
+  await db.delete(assets);
+
+  console.log('Seeding velocity assets...');
   for (const asset of SEED_ASSETS) {
     await db.insert(assets).values(asset).onConflictDoNothing({ target: assets.symbol });
   }

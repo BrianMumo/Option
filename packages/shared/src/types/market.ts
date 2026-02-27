@@ -1,16 +1,14 @@
-export type AssetCategory = 'forex' | 'crypto' | 'commodity' | 'stock' | 'index';
+export type AssetCategory = 'velocity' | 'crash_boom' | 'step' | 'range_break';
 
 export interface Asset {
   id: string;
   symbol: string;
   name: string;
   category: AssetCategory;
-  twelve_data_symbol: string;
   payout_rate: number;
   min_trade: number;
   max_trade: number;
   is_active: boolean;
-  trading_hours: Record<string, { open: string; close: string }> | null;
   sort_order: number;
 }
 

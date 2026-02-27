@@ -19,7 +19,7 @@ export default function LandingPage() {
           Trade Binary Options with M-Pesa
         </h2>
         <p className="text-surface-200/80 mb-8 max-w-sm">
-          Deposit instantly. Trade forex, crypto & commodities. Withdraw to M-Pesa in minutes.
+          Deposit instantly. Trade Velocity synthetic indices 24/7. Withdraw to M-Pesa in minutes.
         </p>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">

@@ -48,14 +48,8 @@ app.use(errorHandler);
 // WebSocket server
 setupWebSocketServer(server);
 
-// Start price feed
+// Start synthetic price feed
 priceFeedService.connect();
-priceFeedService.subscribe([
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD',
-  'EUR/GBP', 'USD/CHF', 'NZD/USD', 'EUR/JPY', 'GBP/JPY',
-  'BTC/USD', 'ETH/USD', 'XRP/USD', 'SOL/USD', 'BNB/USD',
-  'XAU/USD', 'XAG/USD', 'WTI/USD',
-]);
 
 // Start settlement worker
 startSettlementWorker();

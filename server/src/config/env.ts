@@ -27,8 +27,6 @@ const envSchema = z.object({
   MPESA_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
   MPESA_CALLBACK_BASE_URL: z.string().default('http://localhost:5000'),
 
-  TWELVE_DATA_API_KEY: z.string().default(''),
-
   AT_API_KEY: z.string().default(''),
   AT_USERNAME: z.string().default(''),
   AT_SENDER_ID: z.string().default('StakeOpt'),

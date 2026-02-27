@@ -3,7 +3,7 @@ import '@/styles/globals.css';
 
 export const metadata: Metadata = {
   title: 'StakeOption - Trade Binary Options with M-Pesa',
-  description: 'Kenya\'s premier binary options trading platform. Deposit and withdraw instantly with M-Pesa. Trade forex, crypto, and commodities.',
+  description: 'Kenya\'s premier binary options trading platform. Deposit and withdraw instantly with M-Pesa. Trade Velocity synthetic indices 24/7.',
   manifest: '/manifest.json',
 };
 
