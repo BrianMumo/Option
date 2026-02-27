@@ -14,7 +14,7 @@ import marketRoutes from './routes/market.routes';
 import tradeRoutes from './routes/trade.routes';
 import { setupWebSocketServer } from './websocket/wsServer';
 import { priceFeedService } from './services/priceFeed.service';
-import { startSettlementWorker } from './services/settlement.service';
+import { startSettlementWorker, stopSettlementWorker } from './services/settlement.service';
 
 const app = express();
 const server = createServer(app);
@@ -66,5 +66,28 @@ server.listen(PORT, () => {
   logger.info(`WebSocket available at ws://localhost:${PORT}/ws`);
   logger.info(`Environment: ${env.NODE_ENV}`);
 });
+
+// Graceful shutdown
+function shutdown(signal: string) {
+  logger.info({ signal }, 'Graceful shutdown initiated');
+
+  // Stop accepting new connections
+  server.close();
+
+  // Stop settlement worker
+  stopSettlementWorker();
+
+  // Disconnect price feed
+  priceFeedService.disconnect();
+
+  // Give in-flight requests time to complete
+  setTimeout(() => {
+    logger.info('Shutdown timeout reached, exiting');
+    process.exit(0);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;

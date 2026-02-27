@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from '@/lib/api';
+import { wsClient } from '@/lib/websocket';
 
 interface Transaction {
   id: string;
@@ -22,12 +23,14 @@ interface WalletState {
   withdrawLoading: boolean;
   depositStatus: 'idle' | 'pending' | 'success' | 'failed';
   depositMessage: string;
+  error: string | null;
 
   fetchBalance: () => Promise<void>;
   fetchTransactions: (page?: number, type?: string) => Promise<void>;
   deposit: (amount: number, phone?: string) => Promise<void>;
   withdraw: (amount: number, phone?: string) => Promise<void>;
   resetDepositStatus: () => void;
+  initWalletListener: () => void;
 }
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -39,33 +42,41 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   withdrawLoading: false,
   depositStatus: 'idle',
   depositMessage: '',
+  error: null,
 
   fetchBalance: async () => {
     set({ isLoading: true });
     try {
       const res = await api<{ balance: number }>('/wallet/balance');
       if (res.success && res.data) {
-        set({ balance: res.data.balance });
+        set({ balance: res.data.balance, error: null });
       }
+    } catch {
+      set({ error: 'Failed to load balance' });
     } finally {
       set({ isLoading: false });
     }
   },
 
   fetchTransactions: async (page = 1, type?: string) => {
-    const params = new URLSearchParams({ page: String(page), limit: '20' });
-    if (type) params.set('type', type);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (type) params.set('type', type);
 
-    const res = await api<{
-      transactions: Transaction[];
-      pagination: { page: number; limit: number; total: number; pages: number };
-    }>(`/wallet/transactions?${params}`);
+      const res = await api<{
+        transactions: Transaction[];
+        pagination: { page: number; limit: number; total: number; pages: number };
+      }>(`/wallet/transactions?${params}`);
 
-    if (res.success && res.data) {
-      set({
-        transactions: res.data.transactions,
-        txPagination: res.data.pagination,
-      });
+      if (res.success && res.data) {
+        set({
+          transactions: res.data.transactions,
+          txPagination: res.data.pagination,
+          error: null,
+        });
+      }
+    } catch {
+      set({ error: 'Failed to load transactions' });
     }
   },
 
@@ -132,5 +143,28 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
   resetDepositStatus: () => {
     set({ depositStatus: 'idle', depositMessage: '' });
+  },
+
+  initWalletListener: () => {
+    wsClient.on('deposit:confirmed', (_event: string, data: { amount: number; new_balance: number }) => {
+      set({
+        depositStatus: 'success',
+        depositMessage: `Deposit of KSh ${data.amount?.toLocaleString() || ''} confirmed!`,
+        balance: data.new_balance ?? get().balance,
+      });
+      get().fetchTransactions();
+    });
+
+    wsClient.on('deposit:failed', (_event: string, data: { reason?: string }) => {
+      set({
+        depositStatus: 'failed',
+        depositMessage: data.reason || 'Deposit was not completed',
+      });
+    });
+
+    wsClient.on('withdrawal:completed', () => {
+      get().fetchBalance();
+      get().fetchTransactions();
+    });
   },
 }));

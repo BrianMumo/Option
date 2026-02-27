@@ -68,6 +68,13 @@ export async function placeTrade(params: PlaceTradeParams) {
   }
 
   const priceData = JSON.parse(cachedPrice);
+
+  // Reject stale prices (older than 30 seconds)
+  const PRICE_MAX_AGE_MS = 30_000;
+  if (priceData.updated_at && Date.now() - priceData.updated_at > PRICE_MAX_AGE_MS) {
+    throw new AppError('Price data is stale. Please wait for live prices.', 503, 'PRICE_STALE');
+  }
+
   const entryPrice = direction === 'UP' ? priceData.ask : priceData.bid;
   const payoutRate = parseFloat(asset.payout_rate);
 
@@ -165,54 +172,60 @@ async function placeDemoTrade(params: {
 }) {
   const { userId, assetId, direction, amount, timeframeSeconds, entryPrice, payoutRate, expiresAt, symbol } = params;
 
-  // Check demo balance
-  const [user] = await db
-    .select({ demo_balance: users.demo_balance })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // Atomic demo balance debit + trade creation in a single transaction
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  if (!user) {
-    throw new AppError('User not found', 404);
+    // Lock user row and check balance atomically
+    const userResult = await client.query(
+      `SELECT demo_balance FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      throw new AppError('User not found', 404);
+    }
+
+    const demoBalance = parseFloat(userResult.rows[0].demo_balance);
+    if (demoBalance < amount) {
+      throw new AppError('Insufficient demo balance', 400, 'INSUFFICIENT_BALANCE');
+    }
+
+    const newBalance = demoBalance - amount;
+
+    // Debit demo balance
+    await client.query(
+      `UPDATE users SET demo_balance = $1 WHERE id = $2`,
+      [newBalance.toFixed(2), userId]
+    );
+
+    // Create trade
+    const tradeResult = await client.query(
+      `INSERT INTO trades (user_id, asset_id, is_demo, direction, amount, payout_rate, entry_price, timeframe_seconds, expires_at, status)
+       VALUES ($1, $2, true, $3, $4, $5, $6, $7, $8, 'active') RETURNING *`,
+      [userId, assetId, direction, amount.toFixed(2), payoutRate.toFixed(2), entryPrice.toFixed(8), timeframeSeconds, expiresAt]
+    );
+
+    await client.query('COMMIT');
+
+    const trade = tradeResult.rows[0];
+
+    // Track in Redis for settlement
+    await redis.zadd('trades:active', expiresAt.getTime(), trade.id);
+
+    logger.info({ tradeId: trade.id, symbol, direction, amount, demo: true }, 'Demo trade placed');
+
+    return {
+      trade: formatTrade(trade, symbol, ''),
+      new_balance: newBalance,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const demoBalance = parseFloat(user.demo_balance);
-  if (demoBalance < amount) {
-    throw new AppError('Insufficient demo balance', 400, 'INSUFFICIENT_BALANCE');
-  }
-
-  // Debit demo balance
-  await db
-    .update(users)
-    .set({ demo_balance: (demoBalance - amount).toFixed(2) })
-    .where(eq(users.id, userId));
-
-  // Create trade
-  const [trade] = await db
-    .insert(trades)
-    .values({
-      user_id: userId,
-      asset_id: assetId,
-      is_demo: true,
-      direction,
-      amount: amount.toFixed(2),
-      payout_rate: payoutRate.toFixed(2),
-      entry_price: entryPrice.toFixed(8),
-      timeframe_seconds: timeframeSeconds,
-      expires_at: expiresAt,
-      status: 'active',
-    })
-    .returning();
-
-  // Track in Redis for settlement
-  await redis.zadd('trades:active', expiresAt.getTime(), trade.id);
-
-  logger.info({ tradeId: trade.id, symbol, direction, amount, demo: true }, 'Demo trade placed');
-
-  return {
-    trade: formatTrade(trade, symbol, ''),
-    new_balance: demoBalance - amount,
-  };
 }
 
 export async function getActiveTrades(userId: string, isDemo: boolean = false) {

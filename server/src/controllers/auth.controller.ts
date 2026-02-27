@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as authService from '../services/auth.service';
-import { createOTP } from '../services/otp.service';
+import { createOTP, verifyOTP } from '../services/otp.service';
 import { db } from '../config/database';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -29,7 +29,6 @@ export async function verifyOtp(req: Request, res: Response, next: NextFunction)
     }
 
     // For other purposes (login, withdrawal), just verify and return success
-    const { verifyOTP } = require('../services/otp.service');
     const valid = await verifyOTP(phone, code, purpose);
     if (!valid) {
       return res.status(400).json({

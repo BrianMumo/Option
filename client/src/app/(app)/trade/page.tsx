@@ -14,6 +14,7 @@ import { useWalletStore } from '@/store/walletStore';
 import { usePriceFeed } from '@/hooks/usePriceFeed';
 import { QUICK_AMOUNTS, TRADE_TIMEFRAMES } from '@stakeoption/shared';
 import { ArrowUp, ArrowDown, Wifi, WifiOff } from 'lucide-react';
+import { toast } from '@/components/ui/Toast';
 import clsx from 'clsx';
 
 const TradingChart = dynamic(
@@ -47,7 +48,7 @@ export default function TradePage() {
     }
   }, [isPreview, isDemo, fetchActiveTrades]);
 
-  const payoutRate = selectedAsset ? parseFloat(selectedAsset.payout_rate) : 85;
+  const payoutRate = selectedAsset ? selectedAsset.payout_rate : 85;
   const potentialProfit = Math.round(amount * (payoutRate / 100));
 
   const handleTrade = async (direction: 'UP' | 'DOWN') => {
@@ -73,7 +74,7 @@ export default function TradePage() {
         fetchBalance();
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to place trade');
+      toast.error(err.message || 'Failed to place trade');
     }
   };
 
@@ -153,11 +154,14 @@ export default function TradePage() {
               ask={price.ask}
             />
           )}
-          <div className="ml-2">
+          <div className="ml-2 flex items-center gap-1">
             {isConnected ? (
               <Wifi className="w-3.5 h-3.5 text-trade-up/70" />
             ) : (
-              <WifiOff className="w-3.5 h-3.5 text-trade-down/70" />
+              <>
+                <WifiOff className="w-3.5 h-3.5 text-trade-down/70" />
+                <span className="text-[10px] text-yellow-400 animate-pulse">Reconnecting...</span>
+              </>
             )}
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { FullPageLoader } from '@/components/ui/LoadingSpinner';
+import { ToastContainer } from '@/components/ui/Toast';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, isAuthenticated } = useAuth(true);
@@ -16,6 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Header />
       <main className="max-w-lg mx-auto">{children}</main>
       <BottomNav />
+      <ToastContainer />
     </div>
   );
 }

@@ -4,19 +4,31 @@ import { eq, and, gte, lte, asc, desc } from 'drizzle-orm';
 import { redis } from '../config/redis';
 
 export async function getActiveAssets() {
-  return db
+  const result = await db
     .select()
     .from(assets)
     .where(eq(assets.is_active, true))
     .orderBy(asc(assets.sort_order), asc(assets.name));
+  return result.map(formatAsset);
 }
 
 export async function getAssetsByCategory(category: string) {
-  return db
+  const result = await db
     .select()
     .from(assets)
     .where(and(eq(assets.is_active, true), eq(assets.category, category)))
     .orderBy(asc(assets.sort_order), asc(assets.name));
+  return result.map(formatAsset);
+}
+
+/** Parse numeric string fields from DB into actual numbers */
+function formatAsset(asset: typeof assets.$inferSelect) {
+  return {
+    ...asset,
+    payout_rate: parseFloat(asset.payout_rate),
+    min_trade: parseFloat(asset.min_trade),
+    max_trade: parseFloat(asset.max_trade),
+  };
 }
 
 export async function getAssetBySymbol(symbol: string) {

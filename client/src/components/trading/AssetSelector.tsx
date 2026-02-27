@@ -142,7 +142,7 @@ export default function AssetSelector({ onSelect }: AssetSelectorProps) {
                       {formatPrice(livePrice.price, asset.symbol)}
                     </p>
                     <p className="text-xs text-surface-200/40">
-                      {parseFloat(asset.payout_rate)}% payout
+                      {asset.payout_rate}% payout
                     </p>
                   </>
                 ) : (

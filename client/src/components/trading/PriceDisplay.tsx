@@ -28,7 +28,7 @@ export default function PriceDisplay({ symbol, price, bid, ask }: PriceDisplayPr
 
     prevPriceRef.current = price;
 
-    const timer = setTimeout(() => setDirection(null), 500);
+    const timer = setTimeout(() => setDirection(null), 1200);
     return () => clearTimeout(timer);
   }, [price]);
 

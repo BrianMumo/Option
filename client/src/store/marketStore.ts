@@ -7,9 +7,9 @@ interface Asset {
   name: string;
   category: string;
   twelve_data_symbol: string;
-  payout_rate: string;
-  min_trade: string;
-  max_trade: string;
+  payout_rate: number;
+  min_trade: number;
+  max_trade: number;
   is_active: boolean;
   sort_order: number;
   current_price?: {
@@ -34,6 +34,7 @@ interface MarketState {
   selectedAsset: Asset | null;
   candles: Candle[];
   candlesLoading: boolean;
+  error: string | null;
 
   fetchAssets: () => Promise<void>;
   selectAsset: (asset: Asset) => void;
@@ -46,6 +47,7 @@ export const useMarketStore = create<MarketState>((set) => ({
   selectedAsset: null,
   candles: [],
   candlesLoading: false,
+  error: null,
 
   fetchAssets: async () => {
     set({ assetsLoading: true });
@@ -53,7 +55,7 @@ export const useMarketStore = create<MarketState>((set) => ({
       const res = await api<Asset[]>('/market/assets');
       if (res.success && res.data) {
         const assetsList = res.data;
-        set({ assets: assetsList });
+        set({ assets: assetsList, error: null });
 
         // Auto-select first asset if none selected
         if (assetsList.length > 0) {
@@ -63,7 +65,7 @@ export const useMarketStore = create<MarketState>((set) => ({
         }
       }
     } catch {
-      // Assets unavailable
+      set({ error: 'Failed to load assets' });
     } finally {
       set({ assetsLoading: false });
     }
@@ -81,7 +83,7 @@ export const useMarketStore = create<MarketState>((set) => ({
         set({ candles: res.data });
       }
     } catch {
-      // Candles unavailable
+      set({ error: 'Failed to load chart data' });
     } finally {
       set({ candlesLoading: false });
     }

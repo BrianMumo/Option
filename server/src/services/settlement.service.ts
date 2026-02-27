@@ -4,6 +4,7 @@ import { logger } from '../config/logger';
 import { publishToUser } from '../websocket/wsServer';
 
 let settlementInterval: NodeJS.Timeout | null = null;
+let isSettling = false;
 
 /**
  * Settlement worker: polls Redis sorted set every 500ms for expired trades.
@@ -13,10 +14,14 @@ export function startSettlementWorker() {
   logger.info('Settlement worker started (polling every 500ms)');
 
   settlementInterval = setInterval(async () => {
+    if (isSettling) return; // Prevent overlapping runs
+    isSettling = true;
     try {
       await settleExpiredTrades();
     } catch (err) {
       logger.error({ err }, 'Settlement worker error');
+    } finally {
+      isSettling = false;
     }
   }, 500);
 }
@@ -31,20 +36,22 @@ export function stopSettlementWorker() {
 
 async function settleExpiredTrades() {
   const now = Date.now();
+  const BATCH_SIZE = 50;
 
-  // Get all trades whose expiry timestamp <= now
-  const expiredTradeIds = await redis.zrangebyscore('trades:active', 0, now);
+  // Peek at expired trades (score <= now)
+  const expiredTradeIds = await redis.zrangebyscore('trades:active', 0, now, 'LIMIT', 0, BATCH_SIZE);
   if (expiredTradeIds.length === 0) return;
 
   for (const tradeId of expiredTradeIds) {
+    // Atomically remove from set — if zrem returns 0, another worker already claimed it
+    const removed = await redis.zrem('trades:active', tradeId);
+    if (removed === 0) continue;
+
     try {
       await settleTrade(tradeId);
-      // Remove from active set
-      await redis.zrem('trades:active', tradeId);
     } catch (err) {
       logger.error({ err, tradeId }, 'Failed to settle trade');
-      // Remove from set to prevent infinite retry; trade stays as 'active' in DB for manual review
-      await redis.zrem('trades:active', tradeId);
+      // Trade stays as 'active' in DB for manual review — do not re-add to Redis
     }
   }
 }

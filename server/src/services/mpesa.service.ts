@@ -193,6 +193,15 @@ export async function handleSTKCallback(payload: any) {
     return;
   }
 
+  // Distributed lock to prevent duplicate callback processing
+  const lockKey = `mpesa:lock:${CheckoutRequestID}`;
+  const acquired = await redis.set(lockKey, '1', 'EX', 300, 'NX');
+  if (!acquired) {
+    logger.warn({ CheckoutRequestID }, 'STK callback: already being processed (lock held)');
+    return;
+  }
+
+  try {
   if (ResultCode === 0) {
     // SUCCESS - Extract metadata
     const items = CallbackMetadata?.Item || [];
@@ -272,6 +281,9 @@ export async function handleSTKCallback(payload: any) {
     }));
 
     logger.info({ userId: mpesaReq.user_id, ResultCode, ResultDesc }, 'Deposit failed via M-Pesa');
+  }
+  } finally {
+    await redis.del(lockKey);
   }
 }
 

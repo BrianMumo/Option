@@ -93,8 +93,8 @@ class PriceFeedService {
       updated_at: Date.now(),
     };
 
-    // Cache in Redis
-    await redis.set(`price:${symbol}`, JSON.stringify(priceData));
+    // Cache in Redis with 60s TTL (auto-expire if feed dies)
+    await redis.set(`price:${symbol}`, JSON.stringify(priceData), 'EX', 60);
 
     // Publish for WebSocket fan-out to clients
     await redis.publish('price:updates', JSON.stringify(priceData));
@@ -164,7 +164,7 @@ class PriceFeedService {
           updated_at: Date.now(),
         };
 
-        await redis.set(`price:${symbol}`, JSON.stringify(priceData)).catch(() => {});
+        await redis.set(`price:${symbol}`, JSON.stringify(priceData), 'EX', 60).catch(() => {});
         await redis.publish('price:updates', JSON.stringify(priceData)).catch(() => {});
       }
     }, 1000);

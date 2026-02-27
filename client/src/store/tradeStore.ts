@@ -21,6 +21,7 @@ interface TradeState {
   isPlacing: boolean;
   lastSettlement: TradeSettlementEvent | null;
   showResult: boolean;
+  error: string | null;
 
   placeTrade: (params: {
     asset_id: string;
@@ -43,6 +44,7 @@ export const useTradeStore = create<TradeState>((set, get) => ({
   isPlacing: false,
   lastSettlement: null,
   showResult: false,
+  error: null,
 
   placeTrade: async (params) => {
     set({ isPlacing: true });
@@ -71,10 +73,10 @@ export const useTradeStore = create<TradeState>((set, get) => ({
     try {
       const res = await api<TradeWithAsset[]>(`/trades/active?is_demo=${isDemo}`);
       if (res.success && res.data) {
-        set({ activeTrades: res.data });
+        set({ activeTrades: res.data, error: null });
       }
     } catch {
-      // Trades unavailable
+      set({ error: 'Failed to load active trades' });
     }
   },
 
@@ -95,10 +97,11 @@ export const useTradeStore = create<TradeState>((set, get) => ({
         set({
           tradeHistory: res.data.trades,
           historyPagination: res.data.pagination,
+          error: null,
         });
       }
     } catch {
-      // History unavailable
+      set({ error: 'Failed to load trade history' });
     }
   },
 

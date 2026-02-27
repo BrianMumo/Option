@@ -78,11 +78,18 @@ export async function api<T = unknown>(
   }
 
   let res: Response;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch {
-    // Network error (server not running)
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { success: false, error: { message: 'Request timed out', code: 'TIMEOUT' } };
+    }
     return { success: false, error: { message: 'Server unavailable', code: 'NETWORK_ERROR' } };
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // Auto-refresh on 401
@@ -90,10 +97,15 @@ export async function api<T = unknown>(
     const refreshed = await tryRefresh();
     if (refreshed) {
       headers['Authorization'] = `Bearer ${accessToken}`;
+      const retryController = new AbortController();
+      const retryTimeout = setTimeout(() => retryController.abort(), 15000);
       try {
-        res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+        res = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: retryController.signal });
       } catch {
+        clearTimeout(retryTimeout);
         return { success: false, error: { message: 'Server unavailable', code: 'NETWORK_ERROR' } };
+      } finally {
+        clearTimeout(retryTimeout);
       }
     } else {
       clearTokens();

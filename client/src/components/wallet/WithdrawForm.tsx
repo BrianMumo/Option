@@ -15,8 +15,9 @@ export function WithdrawForm() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
-  async function handleWithdraw(e: React.FormEvent) {
+  function handleWithdraw(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -35,6 +36,12 @@ export function WithdrawForm() {
       return;
     }
 
+    setShowConfirmation(true);
+  }
+
+  async function confirmWithdraw() {
+    setShowConfirmation(false);
+    const withdrawAmount = parseInt(amount);
     try {
       await withdraw(withdrawAmount, phone || undefined);
       setSuccess(`Withdrawal of ${formatKES(withdrawAmount)} submitted! Processing within 24 hours.`);
@@ -133,6 +140,35 @@ export function WithdrawForm() {
       <p className="text-xs text-surface-200/40 text-center">
         Withdrawals are processed within 24 hours. You&apos;ll receive the funds directly to your M-Pesa.
       </p>
+
+      {showConfirmation && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-800 border border-surface-700 rounded-2xl p-6 max-w-sm w-full space-y-4">
+            <h3 className="text-lg font-semibold text-surface-50">Confirm Withdrawal</h3>
+            <p className="text-sm text-surface-200/60">
+              Withdraw <span className="text-brand-400 font-semibold">{formatKES(parseInt(amount))}</span> to M-Pesa{phone ? ` (${phone})` : ''}?
+            </p>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1"
+                onClick={() => setShowConfirmation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={confirmWithdraw}
+                isLoading={withdrawLoading}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

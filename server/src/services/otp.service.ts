@@ -25,13 +25,13 @@ export async function createOTP(phone: string, purpose: string): Promise<string>
 export async function verifyOTP(phone: string, code: string, purpose: string): Promise<boolean> {
   const now = new Date();
 
+  // Find the latest unused OTP for this phone+purpose (without checking code)
   const [otp] = await db
     .select()
     .from(otpCodes)
     .where(
       and(
         eq(otpCodes.phone, phone),
-        eq(otpCodes.code, code),
         eq(otpCodes.purpose, purpose),
         eq(otpCodes.is_used, false),
         gt(otpCodes.expires_at, now)
@@ -41,7 +41,17 @@ export async function verifyOTP(phone: string, code: string, purpose: string): P
 
   if (!otp) return false;
 
+  // Check max attempts before incrementing
   if (otp.attempts >= otp.max_attempts) return false;
+
+  // Increment attempt counter on every verification try
+  await db
+    .update(otpCodes)
+    .set({ attempts: otp.attempts + 1 })
+    .where(eq(otpCodes.id, otp.id));
+
+  // Now check if the code matches
+  if (otp.code !== code) return false;
 
   // Mark as used
   await db

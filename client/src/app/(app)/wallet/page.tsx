@@ -10,12 +10,13 @@ import { TransactionList } from '@/components/wallet/TransactionList';
 import clsx from 'clsx';
 
 export default function WalletPage() {
-  const { balance, isLoading, fetchBalance } = useWalletStore();
+  const { balance, isLoading, fetchBalance, initWalletListener } = useWalletStore();
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit');
 
   useEffect(() => {
     fetchBalance();
-  }, [fetchBalance]);
+    initWalletListener();
+  }, [fetchBalance, initWalletListener]);
 
   return (
     <div className="p-4 space-y-6">
