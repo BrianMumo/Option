@@ -5,9 +5,10 @@ import { logger } from './logger';
 export const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: 3,
   retryStrategy(times) {
-    const delay = Math.min(times * 200, 2000);
+    const delay = Math.min(times * 500, 5000);
     return delay;
   },
+  connectTimeout: 10000,
 });
 
 redis.on('connect', () => {
