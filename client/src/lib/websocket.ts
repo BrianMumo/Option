@@ -18,7 +18,11 @@ class WebSocketClient {
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) return;
     this.isConnecting = true;
 
-    const token = getAccessToken() || 'preview';
+    const token = getAccessToken();
+    if (!token) {
+      this.isConnecting = false;
+      return;
+    }
     const url = `${WS_BASE}?token=${token}`;
 
     try {

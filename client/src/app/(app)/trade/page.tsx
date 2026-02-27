@@ -31,7 +31,7 @@ export default function TradePage() {
   const [timeframe, setTimeframe] = useState(60);
   const { selectedAsset, fetchAssets } = useMarketStore();
   const { placeTrade, isPlacing, fetchActiveTrades, initSettlementListener } = useTradeStore();
-  const { isPreview, accountMode, updateDemoBalance } = useAuthStore();
+  const { accountMode, updateDemoBalance } = useAuthStore();
   const { fetchBalance } = useWalletStore();
   const { price, isConnected } = usePriceFeed(selectedAsset?.symbol || null);
 
@@ -43,21 +43,14 @@ export default function TradePage() {
   const isDemo = accountMode === 'demo';
 
   useEffect(() => {
-    if (!isPreview) {
-      fetchActiveTrades(isDemo);
-    }
-  }, [isPreview, isDemo, fetchActiveTrades]);
+    fetchActiveTrades(isDemo);
+  }, [isDemo, fetchActiveTrades]);
 
   const payoutRate = selectedAsset ? selectedAsset.payout_rate : 85;
   const potentialProfit = Math.round(amount * (payoutRate / 100));
 
   const handleTrade = async (direction: 'UP' | 'DOWN') => {
     if (!selectedAsset) return;
-
-    if (isPreview) {
-      simulateDemoTrade(direction);
-      return;
-    }
 
     try {
       const result = await placeTrade({
@@ -76,68 +69,6 @@ export default function TradePage() {
     } catch (err: any) {
       toast.error(err.message || 'Failed to place trade');
     }
-  };
-
-  const simulateDemoTrade = (direction: 'UP' | 'DOWN') => {
-    const tradeId = `demo-${Date.now()}`;
-    const entryPrice = price?.price || 0;
-
-    // Add simulated active trade
-    useTradeStore.setState((state) => ({
-      activeTrades: [
-        {
-          id: tradeId,
-          user_id: 'preview-user',
-          asset_id: selectedAsset!.id,
-          asset_symbol: selectedAsset!.symbol,
-          asset_name: selectedAsset!.name,
-          is_demo: true,
-          direction,
-          amount,
-          payout_rate: payoutRate,
-          entry_price: entryPrice,
-          exit_price: null,
-          timeframe_seconds: timeframe,
-          expires_at: new Date(Date.now() + Math.min(timeframe, 5) * 1000).toISOString(),
-          settled_at: null,
-          result: null,
-          profit: null,
-          status: 'active' as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        ...state.activeTrades,
-      ],
-    }));
-
-    // Simulate settlement (capped at 5s for demo)
-    const settleDelay = Math.min(timeframe * 1000, 5000);
-    setTimeout(() => {
-      const outcomes = ['win', 'win', 'loss', 'win', 'loss', 'draw'] as const;
-      const result = outcomes[Math.floor(Math.random() * outcomes.length)];
-      const profit = result === 'win' ? amount * (payoutRate / 100) : result === 'loss' ? -amount : 0;
-      const exitVariation = Math.abs((Math.random() - 0.5) * 0.001 * entryPrice);
-      const exitPrice = result === 'win'
-        ? (direction === 'UP' ? entryPrice + exitVariation : entryPrice - exitVariation)
-        : result === 'loss'
-          ? (direction === 'UP' ? entryPrice - exitVariation : entryPrice + exitVariation)
-          : entryPrice;
-
-      useTradeStore.setState((state) => ({
-        activeTrades: state.activeTrades.filter((t) => t.id !== tradeId),
-        lastSettlement: {
-          trade_id: tradeId,
-          asset_symbol: selectedAsset!.symbol,
-          direction,
-          amount,
-          result,
-          profit,
-          exit_price: exitPrice,
-          entry_price: entryPrice,
-        },
-        showResult: true,
-      }));
-    }, settleDelay);
   };
 
   return (

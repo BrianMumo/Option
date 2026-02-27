@@ -1,18 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/authStore';
 
 export default function LandingPage() {
-  const router = useRouter();
-  const enterPreview = useAuthStore((s) => s.enterPreview);
-
-  function handlePreview() {
-    enterPreview();
-    router.push('/trade');
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Hero */}
@@ -39,12 +29,6 @@ export default function LandingPage() {
           <Link href="/login" className="btn-secondary text-center">
             I have an account
           </Link>
-          <button
-            onClick={handlePreview}
-            className="text-sm text-brand-400 hover:text-brand-300 transition-colors mt-2"
-          >
-            Preview Demo (no account needed)
-          </button>
         </div>
 
         {/* Features */}

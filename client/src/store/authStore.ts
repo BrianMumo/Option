@@ -8,7 +8,6 @@ interface AuthState {
   user: UserPublic | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  isPreview: boolean;
   accountMode: AccountMode;
 
   register: (phone: string, password: string, firstName?: string, lastName?: string, email?: string) => Promise<{ user_id: string }>;
@@ -17,27 +16,14 @@ interface AuthState {
   login: (phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
-  enterPreview: () => void;
   setAccountMode: (mode: AccountMode) => void;
   updateDemoBalance: (balance: number) => void;
 }
-
-const PREVIEW_USER: UserPublic = {
-  id: 'preview-user',
-  phone: '+254712345678',
-  email: 'demo@stakeoption.co.ke',
-  first_name: 'Demo',
-  last_name: 'Trader',
-  is_verified: true,
-  kyc_status: 'pending',
-  demo_balance: 10000,
-};
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
-  isPreview: false,
   accountMode: 'demo',
 
   register: async (phone, password, firstName, lastName, email) => {
@@ -86,21 +72,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    if (!get().isPreview) {
-      await api('/auth/logout', { method: 'POST' }).catch(() => {});
-      clearTokens();
-    }
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('stakeoption_preview');
-    }
-    set({ user: null, isAuthenticated: false, isPreview: false, accountMode: 'demo' });
-  },
-
-  enterPreview: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('stakeoption_preview', '1');
-    }
-    set({ user: PREVIEW_USER, isAuthenticated: true, isLoading: false, isPreview: true, accountMode: 'demo' });
+    await api('/auth/logout', { method: 'POST' }).catch(() => {});
+    clearTokens();
+    set({ user: null, isAuthenticated: false, accountMode: 'demo' });
   },
 
   setAccountMode: (mode) => {
@@ -115,12 +89,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   loadUser: async () => {
-    // Restore preview mode
-    if (typeof window !== 'undefined' && localStorage.getItem('stakeoption_preview')) {
-      set({ user: PREVIEW_USER, isAuthenticated: true, isLoading: false, isPreview: true, accountMode: 'demo' });
-      return;
-    }
-
     loadTokens();
     if (!getAccessToken()) {
       set({ isLoading: false });

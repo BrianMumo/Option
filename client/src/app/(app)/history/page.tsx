@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useTradeStore } from '@/store/tradeStore';
-import { useAuthStore } from '@/store/authStore';
 import { Clock, ArrowUp, ArrowDown, Trophy, TrendingDown, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -16,17 +15,14 @@ const FILTERS = [
 export default function HistoryPage() {
   const [filter, setFilter] = useState('all');
   const { tradeHistory, historyPagination, fetchTradeHistory } = useTradeStore();
-  const { isPreview } = useAuthStore();
 
   useEffect(() => {
-    if (!isPreview) {
-      fetchTradeHistory({
-        result: filter !== 'all' ? filter : undefined,
-        page: 1,
-        limit: 20,
-      });
-    }
-  }, [filter, isPreview, fetchTradeHistory]);
+    fetchTradeHistory({
+      result: filter !== 'all' ? filter : undefined,
+      page: 1,
+      limit: 20,
+    });
+  }, [filter, fetchTradeHistory]);
 
   const handlePageChange = (page: number) => {
     fetchTradeHistory({
@@ -35,22 +31,6 @@ export default function HistoryPage() {
       limit: 20,
     });
   };
-
-  // Preview mode — show sample trades
-  if (isPreview) {
-    return (
-      <div className="p-4">
-        <h2 className="text-lg font-semibold text-surface-50 mb-4">Trade History</h2>
-        <div className="card text-center py-12">
-          <Clock className="w-12 h-12 text-surface-200/20 mx-auto mb-3" />
-          <p className="text-surface-200/60 text-sm">Demo Mode</p>
-          <p className="text-surface-200/40 text-xs mt-1">
-            Place trades to see your history here
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="p-4">

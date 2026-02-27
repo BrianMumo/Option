@@ -12,7 +12,7 @@ import { User, Shield, Phone, Mail, LogOut, ChevronRight, RefreshCw, Wallet } fr
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isPreview, updateDemoBalance, logout } = useAuthStore();
+  const { user, updateDemoBalance, logout } = useAuthStore();
   const { balance } = useWalletStore();
   const [resetting, setResetting] = useState(false);
 
@@ -24,15 +24,11 @@ export default function ProfilePage() {
   async function handleResetDemo() {
     setResetting(true);
     try {
-      if (isPreview) {
-        updateDemoBalance(DEMO_INITIAL_BALANCE);
-      } else {
-        const res = await api<{ demo_balance: number }>('/auth/reset-demo-balance', {
-          method: 'POST',
-        });
-        if (res.success && res.data) {
-          updateDemoBalance(res.data.demo_balance);
-        }
+      const res = await api<{ demo_balance: number }>('/auth/reset-demo-balance', {
+        method: 'POST',
+      });
+      if (res.success && res.data) {
+        updateDemoBalance(res.data.demo_balance);
       }
     } catch {
       // silently handle
@@ -86,16 +82,14 @@ export default function ProfilePage() {
         </div>
 
         {/* Real Account Card */}
-        {!isPreview && (
-          <div className="bg-surface-900 rounded-lg p-3 border border-surface-700">
-            <div className="flex items-center gap-2 mb-2">
-              <Wallet className="w-4 h-4 text-gold-400" />
-              <span className="text-xs font-medium text-gold-400">Real Account</span>
-            </div>
-            <p className="text-lg font-bold text-gold-400">{formatKES(balance)}</p>
-            <p className="text-xs text-surface-200/40 mt-1">Your live trading balance</p>
+        <div className="bg-surface-900 rounded-lg p-3 border border-surface-700">
+          <div className="flex items-center gap-2 mb-2">
+            <Wallet className="w-4 h-4 text-gold-400" />
+            <span className="text-xs font-medium text-gold-400">Real Account</span>
           </div>
-        )}
+          <p className="text-lg font-bold text-gold-400">{formatKES(balance)}</p>
+          <p className="text-xs text-surface-200/40 mt-1">Your live trading balance</p>
+        </div>
       </div>
 
       {/* Account Info */}
